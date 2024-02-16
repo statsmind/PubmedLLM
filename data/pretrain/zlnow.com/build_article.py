@@ -9,7 +9,7 @@ from lxml.etree import _Element
 
 from six import unichr
 
-from data.pretrain.utils import output_article
+from data.pretrain.utils import output_article, base_path
 
 
 def process_html_file(filename):
@@ -71,7 +71,7 @@ def process_file(filepath):
 
 if __name__ == "__main__":
     abs_filenames = []
-    for dirpath, dirnames, filenames in os.walk(r"Z:\datasets\www.zlnow.com"):
+    for dirpath, dirnames, filenames in os.walk(os.path.join(base_path, "www.zlnow.com")):
         for filename in filenames:
             if not filename.endswith(".json"):
                 continue
