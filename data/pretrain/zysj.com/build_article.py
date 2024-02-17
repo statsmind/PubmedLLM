@@ -33,8 +33,8 @@ def parse_html(filepath):
 
 
 def process_file(filepath):
-    title, content = parse_html(filepath)
     try:
+        title, content = parse_html(filepath)
         title, result = output_article("zysj", title, content)
         print(title, result)
     except Exception as ex:
