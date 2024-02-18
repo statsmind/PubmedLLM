@@ -7,10 +7,14 @@ import hashlib
 import requests
 from Bio import Entrez
 from math import ceil
+
+from dotenv import load_dotenv
 from lxml import etree
-# from cacheout import Cache
-#
-# cache = Cache()
+from zhipuai import ZhipuAI
+
+load_dotenv()
+
+ai_client = ZhipuAI()
 Entrez.email = "jameshu@live.ccom"
 
 pubmed_ids = []
@@ -72,6 +76,9 @@ cache = Cache(".cache")
 
 @cache.bucket("justscience")
 def query_justscience(issn):
+    if issn is None or len(issn) == 0:
+        return None
+
     response = requests.get(
         f"https://sci.justscience.cn/list?sci=1&q={issn}&research_area=&If_range_min=&If_range_max=&jcr_quartile=0&oa=2&Self_cites_ratio_min=&Self_cites_ratio_max=&mainclass=0&subclass=0&pub_country=&not_pub_country=&sci_type=2&pub_frequency=7&adv=1")
     root = etree.HTML(response.text)
@@ -102,6 +109,24 @@ def fetch_pubmed(pmid):
 def search_pubmed(term, retmax: int = 2000):
     handle = Entrez.esearch(db="pubmed", retmax=retmax, retstart=0, term=term, sort="Pub Date")
     return Entrez.read(handle)
+
+
+@cache.bucket("embedding")
+def get_embedding(text):
+    response = ai_client.embeddings.create(input=text, model='embedding-2')
+    return response.data[0].embedding
+    # client = ZhipuAI(api_key="")  # 填写您自己的APIKey
+    # response = client.chat.completions.create(
+    #     model="glm-3-turbo",  # 填写需要调用的模型名称
+    #     messages=[
+    #         {"role": "user", "content": "作为一名营销专家，请为我的产品创作一个吸引人的slogan"},
+    #         {"role": "assistant", "content": "当然，为了创作一个吸引人的slogan，请告诉我一些关于您产品的信息"},
+    #         {"role": "user", "content": "智谱AI开放平台"},
+    #         {"role": "assistant", "content": "智启未来，谱绘无限一智谱AI，让创新触手可及!"},
+    #         {"role": "user", "content": "创造一个更精准、吸引人的slogan"}
+    #     ],
+    # )
+    # print(response.choices[0].message)
 
 
 def string_to_float(text) -> float:
@@ -135,21 +160,29 @@ def parse_pubmed(content: str):
     return dict(title=title, abstract=abstract, issn=issn)
 
 
-count = 0
+candidates = []
+
 search_result = search_pubmed("stroke")
 for idx, pmid in enumerate(search_result['IdList']):
     content = fetch_pubmed(pmid)
     info = parse_pubmed(content)
 
-    if info['issn'] != '':
-        if_info = query_justscience(info['issn'])
-        if len(if_info) > 0 and len(info['title']) > 50 and string_to_float(if_info[7]) >= 4.0:
-            print(info['title'])
-            # print("Title:", info['title'])
-            # print("Abstract:", info['abstract'])
-            # print("Impact Factor:", if_info[7])
-            count += 1
-    else:
-        print(idx, pmid, "no issn")
+    if_info = query_justscience(info['issn'])
+    if if_info is None or len(if_info) == 0 or string_to_float(if_info[7]) < 4.0:
+        continue
 
-print(count)
+    info['embedding'] = get_embedding(info['title'] + "\n" + info['abstract'])
+    candidates.append(info)
+
+
+from sklearn.cluster import KMeans
+
+X = [info['embedding'] for info in candidates]
+
+# 把所有文章分成10个类
+cluster = KMeans(n_clusters=10, random_state=0).fit(X)
+for idx, label in enumerate(cluster.labels_):
+    candidates[idx]['label'] = label
+
+
+print(cluster)
