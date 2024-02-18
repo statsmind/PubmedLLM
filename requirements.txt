@@ -1,0 +1,8 @@
+simple_loggers
+langchain
+langchain_community
+sentence_transformers
+w3lib
+chromadb
+pymilvus
+biopython
